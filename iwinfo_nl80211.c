@@ -3334,8 +3334,8 @@ struct nl80211_modes
 
 	uint16_t nl_ht;
 	uint32_t nl_vht;
-	uint16_t he_phy_cap[6];
-	uint16_t eht_phy_cap[9];
+	uint8_t he_phy_cap0;
+	uint8_t eht_phy_cap0;
 };
 
 static void nl80211_eval_modelist(struct nl80211_modes *m)
@@ -3350,33 +3350,33 @@ static void nl80211_eval_modelist(struct nl80211_modes *m)
 			m->ht |= IWINFO_HTMODE_HT40;
 	}
 
-	if (m->he_phy_cap[0] != 0) {
+	if (m->he_phy_cap0 != 0) {
 		m->hw |= IWINFO_80211_AX;
 		m->ht |= IWINFO_HTMODE_HE20;
 
-		if (m->he_phy_cap[0] & BIT(9))
+		if (m->he_phy_cap0 & BIT(1))
 			m->ht |= IWINFO_HTMODE_HE40;
-		if (m->he_phy_cap[0] & BIT(10))
+		if (m->he_phy_cap0 & BIT(2))
 			m->ht |= IWINFO_HTMODE_HE40 | IWINFO_HTMODE_HE80;
-		if (m->he_phy_cap[0] & BIT(11))
+		if (m->he_phy_cap0 & BIT(3))
 			m->ht |= IWINFO_HTMODE_HE160;
-		if (m->he_phy_cap[0] & BIT(12))
+		if (m->he_phy_cap0 & BIT(4))
 			m->ht |= IWINFO_HTMODE_HE160 | IWINFO_HTMODE_HE80_80;
 	}
 
-	if (m->eht_phy_cap[0] != 0) {
+	if (m->eht_phy_cap0 != 0) {
 		m->hw |= IWINFO_80211_BE;
 		m->ht |= IWINFO_HTMODE_EHT20;
 
-		if (m->he_phy_cap[0] & BIT(9))
+		if (m->he_phy_cap0 & BIT(1))
 			m->ht |= IWINFO_HTMODE_EHT40;
-		if (m->he_phy_cap[0] & BIT(10))
+		if (m->he_phy_cap0 & BIT(2))
 			m->ht |= IWINFO_HTMODE_EHT40 | IWINFO_HTMODE_EHT80;
-		if (m->he_phy_cap[0] & BIT(11))
+		if (m->he_phy_cap0 & BIT(3))
 			m->ht |= IWINFO_HTMODE_EHT160;
-		if (m->he_phy_cap[0] & BIT(12))
+		if (m->he_phy_cap0 & BIT(4))
 			m->ht |= IWINFO_HTMODE_EHT160 | IWINFO_HTMODE_EHT80_80;
-		if ((m->eht_phy_cap[0] & BIT(9)) && (m->bands & IWINFO_BAND_6))
+		if ((m->eht_phy_cap0 & BIT(1)) && (m->bands & IWINFO_BAND_6))
 			m->ht |= IWINFO_HTMODE_EHT320;
 	}
 
@@ -3444,33 +3444,19 @@ static int nl80211_get_modelist_cb(struct nl_msg *msg, void *arg)
 				struct nlattr *tb[NL80211_BAND_IFTYPE_ATTR_MAX + 1];
 				struct nlattr *nl_iftype;
 				int rem_band;
-				int len;
 
 				nla_for_each_nested(nl_iftype, bands[NL80211_BAND_ATTR_IFTYPE_DATA], rem_band) {
 					nla_parse(tb, NL80211_BAND_IFTYPE_ATTR_MAX,
 						  nla_data(nl_iftype), nla_len(nl_iftype), NULL);
 
-					// HE
-					if (tb[NL80211_BAND_IFTYPE_ATTR_HE_CAP_PHY]) {
-						len = nla_len(tb[NL80211_BAND_IFTYPE_ATTR_HE_CAP_PHY]);
+					/* Channel width flags are in the first PHY capability byte. */
+					if (tb[NL80211_BAND_IFTYPE_ATTR_HE_CAP_PHY] &&
+					    nla_len(tb[NL80211_BAND_IFTYPE_ATTR_HE_CAP_PHY]) >= 1)
+						m->he_phy_cap0 = nla_get_u8(tb[NL80211_BAND_IFTYPE_ATTR_HE_CAP_PHY]);
 
-						if (len > sizeof(m->he_phy_cap) - 1)
-							len = sizeof(m->he_phy_cap) - 1;
-						memcpy(&((__u8 *)m->he_phy_cap)[1],
-							nla_data(tb[NL80211_BAND_IFTYPE_ATTR_HE_CAP_PHY]),
-							len);
-					}
-
-					// EHT
-					if (tb[NL80211_BAND_IFTYPE_ATTR_EHT_CAP_PHY]) {
-						len = nla_len(tb[NL80211_BAND_IFTYPE_ATTR_EHT_CAP_PHY]);
-
-						if (len > sizeof(m->eht_phy_cap) - 1)
-							len = sizeof(m->eht_phy_cap) - 1;
-						memcpy(&((uint8_t *)m->eht_phy_cap)[1],
-							nla_data(tb[NL80211_BAND_IFTYPE_ATTR_EHT_CAP_PHY]),
-							len);
-					}
+					if (tb[NL80211_BAND_IFTYPE_ATTR_EHT_CAP_PHY] &&
+					    nla_len(tb[NL80211_BAND_IFTYPE_ATTR_EHT_CAP_PHY]) >= 1)
+						m->eht_phy_cap0 = nla_get_u8(tb[NL80211_BAND_IFTYPE_ATTR_EHT_CAP_PHY]);
 				}
 			}
 		}
